@@ -70,7 +70,7 @@ func (c *Changelog) loopFiles(versionFolderName string) (ChangelogVersion, error
 	// sort in reverse order
 	sort.Slice(versionFiles, func(i, j int) bool { return versionFiles[i].Name() > versionFiles[j].Name() })
 
-	r, _ := regexp.Compile(`^(\d\.\d\.\d) - (\d\d\d\d-\d\d-\d\d)`)
+	r, _ := regexp.Compile(`^(\d\.\d\.\d)_(\d\d\d\d-\d\d-\d\d)`)
 	if versionFolderName == "Unreleased" {
 		version.Version = versionFolderName
 		version.Date = ""

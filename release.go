@@ -114,6 +114,6 @@ func renameUnreleasedFolder(path, version, date string) error {
 	exec.Command("git", "clean", "-df", filepath.Join(path, ".changelog")).Run()
 
 	og := filepath.Join(path, ".changelog", "Unreleased")
-	new := filepath.Join(path, ".changelog", fmt.Sprintf("%s - %s", version, date))
+	new := filepath.Join(path, ".changelog", fmt.Sprintf("%s_%s", version, date))
 	return os.Rename(og, new)
 }
