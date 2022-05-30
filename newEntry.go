@@ -134,7 +134,7 @@ func CreateChangelogEntry(root string) error {
 		return fmt.Errorf("failed to create changelog file: %v", err)
 	}
 
-	newFile.WriteString(fmt.Sprintf("%s:\n  - '%s'", entryType, escapeYaml(entry.Change)))
+	newFile.WriteString(fmt.Sprintf("%s:\n  - '%s'\n", entryType, escapeYaml(entry.Change)))
 	newFile.Close()
 
 	fmt.Printf("%s created successfully!\n", newFile.Name())
