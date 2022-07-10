@@ -25,7 +25,7 @@ change: ''
 
 # Help: --------------------------------
 #
-# filetype:
+# filename:
 #   - a short name for the file to be created
 # entrytype:
 #   - either added, changed, deprecated, removed, fixed, security
