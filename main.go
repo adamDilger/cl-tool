@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Command string
@@ -44,6 +45,13 @@ func main() {
 	}
 
 	cmd.Parse(os.Args[2:])
+
+	// .changelog folder does not exist
+	clFilePath := filepath.Join(path, ".changelog")
+	if _, err := os.Stat(clFilePath); os.IsNotExist(err) {
+		fmt.Printf("'%s' folder does not exist. Check cwd or create directory before running.\n", clFilePath)
+		os.Exit(1)
+	}
 
 	var err error
 
