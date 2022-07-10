@@ -1,0 +1,1 @@
+Check git information prior.
