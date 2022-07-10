@@ -24,7 +24,6 @@ At release time, rename the `Unreleased` folder with the appropriate version num
 
 ![](/images/generate.jpg)
 
-
 ## Commands
 
 - `new`: Create new changelog entries, under the `.changelog/Unreleased` folder
@@ -44,3 +43,9 @@ Inspired by:
 ## Custom templates
 
 Add a `.changelog/head.md` file to override the default header text. Add a `.changelog/tail.md` file to add text at the bottom of the changelog.
+
+## Creating a release
+
+1. Update the .changelog
+2. `make compile version=<new-verison>`
+2. create `<new-version>` tag
