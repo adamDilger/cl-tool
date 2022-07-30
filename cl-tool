@@ -1,0 +1,200 @@
+#!/bin/sh
+
+version="1.1.0"
+
+if [ -z $(command -v yq) ]; then
+	echo "'yq' could not be found. Please install 'yq' to run this command"
+	exit 1
+fi
+
+usage() {
+	cat <<EOF
+Usage: cl-tool [options] command
+
+Commands:
+
+generate        (default) output the current changelog to stdout
+new             create a new changelog entry
+release         create a versioned folder from the Unreleased entries
+    [-vn | --version-number] <version> - skips the version number prompt
+                                         e.g. cl-tool release -vn 1.2.3
+
+Available options:
+
+-h, --help      Print this help and exit
+-v, --version   Print the current version
+-r, --root      The repository root directory containing the .changelog folder (default pwd)
+EOF
+	exit
+}
+
+parse_params() {
+	# default values
+	root=$(pwd)
+
+	while :; do
+		case "${1-}" in
+		-h | --help) usage ;;
+		-v | --version) echo "Version: $version" && exit ;;
+		-r | --root)
+			root="${2-}"
+			shift
+			;;
+		-?*) echo "Unknown option: $1" && exit 1 ;;
+		*) break ;;
+		esac
+		shift
+	done
+
+	command="${1:-generate}"
+	[ "$command" != "generate" ] && [ "$command" != "new" ] && [ "$command" != "release" ] &&
+		(printf "Unknown command: $command\n" && usage)
+}
+
+parse_params "$@"
+
+cl_dir="$root/.changelog"
+[ ! -d "$cl_dir" ] && echo "A .changelog folder does not exist in $root. Exiting..." && exit 1
+
+parse_cl_directory() {
+	local version=$(echo "$1" | grep -oE '([0-9]\.){2}[0-9]')
+	local date=$(echo "$1" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
+	files="$(find $1 -mindepth 1 | sort -r)"
+	[ -z "$files" ] && return
+
+	case $1 in
+	*"Unreleased")
+		echo "## Unreleased"
+		;;
+	*)
+		echo "## [$version] - $date"
+		;;
+	esac
+
+	yq eval-all '. as $item ireduce ({}; . *+ $item) | sort_keys(.)' $files |
+		sed -E -e "s/^(\w+):\$/### \u\1/" -e "s/^  - '(.*)'\$/- \1/" -e "s/^  - \"(.*)\"\$/- \1/"
+
+	echo #newline
+}
+
+generate_changelog() {
+	if [ -f "$cl_dir/head.md" ]; then
+		cat "$cl_dir/head.md"
+		printf "\n"
+	else
+		printf "# Changelog\n"
+		printf "All notable changes to this project will be documented in this file.\n"
+		printf "\nThe format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).\n\n"
+	fi
+
+	find $cl_dir ! -path $cl_dir -type d | sort -r | while read dir; do
+		parse_cl_directory "$dir"
+	done
+
+	[ -f "$cl_dir/tail.md" ] && cat "$cl_dir/tail.md"
+}
+
+write_error() {
+	sed -i '/^# Help:.*$/,$d' $1
+	sed -i '/^# ----- ERROR:$/,$d' $1
+	printf "\n# ----- ERROR:\n# $2\n" >>$1
+}
+
+create_new_entry() {
+	tmpfile="${CL_TOOL_TMP_FILE:-$(mktemp)}"
+	cat <<EOF >>$tmpfile
+# :!:  Changelog Entry Creator  :!:
+# ---------------------------------
+
+# Fill out the fields below, then save and quit
+
+filename: ''
+entrytype: 
+change: ''
+
+
+# Help: --------------------------------
+#
+# filename:
+#   - a short name for the file to be created
+# entrytype:
+#   - either added, changed, deprecated, removed, fixed, security
+# change:
+#   - the actual line you want to put in the changelog
+#
+# Example:
+#
+# filename: 'attachment type field'
+# entrytype: 'added'
+# change: 'Attachment type field added to the Attachment Table'
+EOF
+
+	restart="true"
+	while [ -n "$restart" ]; do
+		restart=""
+
+		${VISUAL:-${EDITOR:-vi}} "$tmpfile"
+		status="$?"
+		[ "$status" != "0" ] && printf "Exiting with status $status...\n" && exit $status
+
+		filename=$(yq ".filename" $tmpfile | sed 's/ /-/g')
+		entry_type=$(yq ".entrytype" $tmpfile | tr '[:upper:]' '[:lower:]')
+		change=$(yq ".change" $tmpfile | sed "s/'/\'/g")
+
+		# empty values
+		([ -z "$filename" ] || [ -z "$entry_type" ] || [ -z "$change" ]) &&
+			restart="true" && write_error "$tmpfile" "Missing required field"
+		# invalid entry types
+		[ "$entry_type" != "added" ] &&
+			[ "$entry_type" != "changed" ] &&
+			[ "$entry_type" != "deprecated" ] &&
+			[ "$entry_type" != "removed" ] &&
+			[ "$entry_type" != "fixed" ] &&
+			[ "$entry_type" != "security" ] &&
+			restart="true" && write_error "$tmpfile" "Invalid entry type: $entry_type"
+	done
+
+	mkdir -p "$cl_dir/Unreleased"
+	new_file_name="$(date +%Y-%m-%e)-$filename.yml"
+	new_file="$cl_dir/Unreleased/$new_file_name"
+
+	yq '{ .entrytype: [.change] }' $tmpfile >$new_file
+	rm $tmpfile
+
+	echo "Successfully created new entry: .changelog/Unreleased/$new_file_name"
+}
+
+create_release() {
+	if [ ! -d "$root/.changelog/Unreleased" ]; then
+		echo "No .changelog/Unreleased folder exists."
+		exit
+	fi
+
+	while [ -n "$1" ]; do
+		case "${1-}" in
+		-vn | --version-number) new_version="${2-}" shift ;;
+		esac
+		shift
+	done
+
+	[ -z "$new_version" ] && read -p "Version: " new_version
+	if [ -z "$new_version" ]; then
+		echo "No version provided. Exiting..."
+		exit
+	fi
+
+	version_folder="${new_version}_$(date +%Y-%m-%e)"
+
+	mv "$root/.changelog/Unreleased" "$root/.changelog/$version_folder"
+
+	echo "Created .changelog/$version_folder"
+}
+
+if [ "$command" = "generate" ]; then
+	generate_changelog
+elif [ "$command" = "new" ]; then
+	create_new_entry
+elif [ "$command" = "release" ]; then
+	create_release "$@"
+fi
