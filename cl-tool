@@ -1,6 +1,6 @@
 #!/bin/sh
 
-version="1.1.0"
+_VERSION="1.1.1"
 
 if [ -z $(command -v yq) ]; then
 	echo "'yq' could not be found. Please install 'yq' to run this command"
@@ -35,7 +35,7 @@ parse_params() {
 	while :; do
 		case "${1-}" in
 		-h | --help) usage ;;
-		-v | --version) echo "Version: $version" && exit ;;
+		-v | --version) echo "Version: $_VERSION" && exit ;;
 		-r | --root)
 			root="${2-}"
 			shift
@@ -72,8 +72,12 @@ parse_cl_directory() {
 		;;
 	esac
 
-	yq eval-all '. as $item ireduce ({}; . *+ $item) | sort_keys(.)' $files |
-		sed -E -e "s/^(\w+):\$/### \u\1/" -e "s/^  - '(.*)'\$/- \1/" -e "s/^  - \"(.*)\"\$/- \1/"
+	yq eval-all -P '. as $item ireduce ({}; . *+ $item) |
+			with_entries(
+				.key |= (match("(\w)(.*)").captures | "### " + (.[0].string | upcase) + .[1].string)
+			)
+	' $files | \
+		sed -E -e 's/^  -/-/' -e "s/^'(.*)':\$/\1/"
 
 	echo #newline
 }
@@ -156,7 +160,7 @@ EOF
 	done
 
 	mkdir -p "$cl_dir/Unreleased"
-	new_file_name="$(date +%Y-%m-%e)-$filename.yml"
+	new_file_name="$(date +%Y-%0m-%0d)-$filename.yml"
 	new_file="$cl_dir/Unreleased/$new_file_name"
 
 	yq '{ .entrytype: [.change] }' $tmpfile >$new_file
@@ -184,7 +188,7 @@ create_release() {
 		exit
 	fi
 
-	version_folder="${new_version}_$(date +%Y-%m-%e)"
+	version_folder="${new_version}_$(date +%Y-%0m-%0d)"
 
 	mv "$root/.changelog/Unreleased" "$root/.changelog/$version_folder"
 
