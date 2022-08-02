@@ -20,25 +20,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 `
 
 type Changelog struct {
-	Versions         []ChangelogVersion
-	path, head, tail string
+	Versions   []ChangelogVersion
+	head, tail string
 }
 
 func NewChangelog(root string) (*Changelog, error) {
-	c := Changelog{path: filepath.Join(root, ".changelog")}
+	c := Changelog{}
 
-	if err := c.readFromFiles(); err != nil {
+	path := filepath.Join(root, ".changelog")
+	if err := c.readFromFiles(path); err != nil {
 		return nil, err
 	}
 
 	return &c, nil
 }
 
-func (changelog *Changelog) readFromFiles() error {
-	changelog.head = changelog.parseTemplate("head", head_default)
-	changelog.tail = changelog.parseTemplate("tail", "")
+func (c *Changelog) readFromFiles(path string) error {
+	c.head = c.parseTemplate(path, "head", head_default)
+	c.tail = c.parseTemplate(path, "tail", "")
 
-	versionFolders, err := os.ReadDir(changelog.path)
+	versionFolders, err := os.ReadDir(path)
 	if err != nil {
 		return fmt.Errorf("failed to read changlog directory: %v", err)
 	}
@@ -48,21 +49,25 @@ func (changelog *Changelog) readFromFiles() error {
 			continue
 		}
 
-		v, err := changelog.loopFiles(folder.Name())
+		v, err := c.loopFiles(path, folder.Name())
 		if err != nil {
 			return fmt.Errorf("failed to parse changelog files: %v", err)
 		}
 
-		changelog.Versions = append(changelog.Versions, v)
+		if len(v.Files) == 0 {
+			continue
+		}
+
+		c.Versions = append(c.Versions, v)
 	}
 
 	return nil
 }
 
-func (c *Changelog) loopFiles(versionFolderName string) (ChangelogVersion, error) {
+func (c *Changelog) loopFiles(path, versionFolderName string) (ChangelogVersion, error) {
 	var version ChangelogVersion
 
-	versionFiles, err := os.ReadDir(filepath.Join(c.path, versionFolderName))
+	versionFiles, err := os.ReadDir(filepath.Join(path, versionFolderName))
 	if err != nil {
 		return version, fmt.Errorf("failed to read files from version folder %s: %v", versionFolderName, err)
 	}
@@ -88,7 +93,7 @@ func (c *Changelog) loopFiles(versionFolderName string) (ChangelogVersion, error
 			continue
 		}
 
-		path := filepath.Join(c.path, versionFolderName, vFile.Name())
+		path := filepath.Join(path, versionFolderName, vFile.Name())
 
 		file, err := os.Open(path)
 		if err != nil {
@@ -107,8 +112,8 @@ func (c *Changelog) loopFiles(versionFolderName string) (ChangelogVersion, error
 	return version, nil
 }
 
-func (c *Changelog) parseTemplate(templateName, fallback string) string {
-	file, err := os.Open(filepath.Join(c.path, templateName+".md"))
+func (c *Changelog) parseTemplate(path, templateName, fallback string) string {
+	file, err := os.Open(filepath.Join(path, templateName+".md"))
 	if err != nil {
 		return fallback
 	}

@@ -1,8 +1,7 @@
-package main
+package entry
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,27 +15,16 @@ import (
 const template string = `# :!:  Changelog Entry Creator  :!:
 # ---------------------------------
 #
-# Fill out the fields below, then save and quit
+# Fill out the fields below (in yaml format), then save and quit
 
-filename: ''
+# one of (added, changed, deprecated, removed, fixed, security)
 entrytype:
-change: ''
 
+# the line to be added into the changelog
+change:
 
-# Help: --------------------------------
-#
-# filename:
-#   - a short name for the file to be created
-# entrytype:
-#   - either added, changed, deprecated, removed, fixed, security
-# change:
-#   - the actual line you want to put in the changelog
-#
-# Example:
-#
-# filename: 'attachment type field'
-# entrytype: 'added'
-# change: 'Attachment type field added to the Attachment Table'
+# a short name for the file to be created (not used in final output)
+filename:
 `
 
 var allEntryTypes []string = []string{
@@ -56,11 +44,11 @@ type ChangelogEntry struct {
 
 func (ce *ChangelogEntry) IsValid() error {
 	if ce.Filename == "" {
-		return errors.New("filename must not be empty")
+		return fmt.Errorf("filename must not be empty")
 	}
 
 	if ce.Change == "" {
-		return errors.New("change must not be empty")
+		return fmt.Errorf("change must not be empty")
 	}
 
 	found := false
@@ -82,13 +70,15 @@ func CreateChangelogEntry(root string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %v", err)
 	}
-
+	defer tmpFile.Close()
 	tmpFile.WriteString(template)
-	tmpFile.Close()
 
-	editor := os.ExpandEnv("$EDITOR")
+	editor := os.ExpandEnv("$VISUAL")
 	if editor == "" {
-		editor = "nano"
+		editor = os.ExpandEnv("$EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
 	}
 
 	repeat := true
@@ -133,17 +123,18 @@ func CreateChangelogEntry(root string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create changelog file: %v", err)
 	}
+	defer newFile.Close()
 
-	newFile.WriteString(fmt.Sprintf("%s:\n  - '%s'\n", entryType, escapeYaml(entry.Change)))
-	newFile.Close()
+	out := make(map[string][]string)
+	out[entryType] = []string{entry.Change}
+
+	err = yaml.NewEncoder(newFile).Encode(out)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %v", err)
+	}
 
 	fmt.Printf("%s created successfully!\n", newFile.Name())
-
 	return nil
-}
-
-func escapeYaml(s string) string {
-	return strings.ReplaceAll(s, "'", `\'`)
 }
 
 func userYesOrNo(question string) bool {
