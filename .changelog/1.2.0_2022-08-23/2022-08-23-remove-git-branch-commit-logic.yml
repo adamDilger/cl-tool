@@ -1,0 +1,3 @@
+removed:
+- removed git branch/commit logic from `release` command, only updating folder name
+  instead

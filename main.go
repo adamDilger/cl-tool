@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-const _VERSION = "1.0.3"
+const _VERSION = "1.2.0"
 
 func main() {
 	var printHelp bool
