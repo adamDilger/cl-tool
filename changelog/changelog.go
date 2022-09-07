@@ -24,6 +24,31 @@ type Changelog struct {
 	head, tail string
 }
 
+type bySemver []ChangelogVersion
+
+func (s bySemver) Len() int      { return len(s) }
+func (s bySemver) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s bySemver) Less(i, j int) bool {
+	si, sj := s[i], s[j]
+
+	//	put unreleased versions first, else sort by version number
+	if si.IsUnreleased() {
+		return false
+	} else if sj.IsUnreleased() {
+		return true
+	}
+
+	if si.Major == sj.Major {
+		if si.Minor == sj.Minor {
+			return si.Patch < sj.Patch
+		}
+
+		return si.Minor < sj.Minor
+	}
+
+	return si.Major < sj.Major
+}
+
 func NewChangelog(root string) (*Changelog, error) {
 	c := Changelog{}
 
@@ -54,12 +79,16 @@ func (c *Changelog) readFromFiles(path string) error {
 			return fmt.Errorf("failed to parse changelog files: %v", err)
 		}
 
+		fmt.Fscanf(strings.NewReader(v.Version), "%d.%d.%d", &v.Major, &v.Minor, &v.Patch)
+
 		if len(v.Files) == 0 {
 			continue
 		}
 
 		c.Versions = append(c.Versions, v)
 	}
+
+	sort.Sort(sort.Reverse(bySemver(c.Versions)))
 
 	return nil
 }
@@ -75,7 +104,7 @@ func (c *Changelog) loopFiles(path, versionFolderName string) (ChangelogVersion,
 	// sort in reverse order
 	sort.Slice(versionFiles, func(i, j int) bool { return versionFiles[i].Name() > versionFiles[j].Name() })
 
-	r, _ := regexp.Compile(`^(\d\.\d\.\d)_(\d\d\d\d-\d\d-\d\d)`)
+	r, _ := regexp.Compile(`^(\d+\.\d+\.\d+)_(\d\d\d\d-\d\d-\d\d)`)
 	if versionFolderName == "Unreleased" {
 		version.Version = versionFolderName
 		version.Date = ""
@@ -129,17 +158,6 @@ func (c *Changelog) parseTemplate(path, templateName, fallback string) string {
 func (c *Changelog) Render(writer io.Writer) {
 	fmt.Fprintf(writer, "%s\n", c.head)
 
-	//	put unreleased versions first, else sort by version number
-	sort.Slice(c.Versions, func(i, j int) bool {
-		if c.Versions[i].IsUnreleased() {
-			return true
-		} else if c.Versions[j].IsUnreleased() {
-			return false
-		}
-
-		return c.Versions[i].Version > c.Versions[j].Version
-	})
-
 	for i, v := range c.Versions {
 		fmt.Fprint(writer, v.Title())
 
@@ -172,8 +190,9 @@ func (c *Changelog) Render(writer io.Writer) {
 }
 
 type ChangelogVersion struct {
-	Version, Date string
-	Files         []ChanglogFile
+	Version, Date       string
+	Major, Minor, Patch int
+	Files               []ChanglogFile
 }
 
 func (v *ChangelogVersion) IsUnreleased() bool {

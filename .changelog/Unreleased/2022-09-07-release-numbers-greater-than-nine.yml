@@ -1,0 +1,2 @@
+fixed:
+- allow numbers greater than 9 to be used in the release command
