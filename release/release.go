@@ -2,7 +2,6 @@ package release
 
 import (
 	"bufio"
-	"cl-tool/changelog"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,17 +30,6 @@ func CreateRelease(root, version string) error {
 		return err
 	}
 
-	fmt.Println("Regenerating CHANGELOG.md")
-	c, err := changelog.NewChangelog(root)
-	if err != nil {
-		return err
-	}
-
-	err = regenerateChangelogFile(root, c)
-	if err != nil {
-		return err
-	}
-
 	fmt.Println("Success!")
 	return nil
 }
@@ -61,17 +49,6 @@ func getVersionNumber() (string, error) {
 	}
 
 	return versionNumber, nil
-}
-
-func regenerateChangelogFile(path string, c *changelog.Changelog) error {
-	clFile, err := os.Create(filepath.Join(path, "CHANGELOG.md"))
-	if err != nil {
-		return fmt.Errorf("error creating CHANGELOG.md: %v", err)
-	}
-
-	c.Render(clFile)
-
-	return clFile.Close()
 }
 
 func renameUnreleasedFolder(path, version, date string) error {
